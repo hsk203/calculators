@@ -9,16 +9,16 @@ visitor's browser (client-side JavaScript); nothing is sent to a server.
 
 ## Batch 1 — 12 calculators, 8 categories
 
-| Category | Calculators |
-| --- | --- |
-| Finance & Tax | Compound Interest, Take-Home Pay |
-| Business & Startup | Startup Cost, Break-Even, Profit Margin |
-| Freelance & Gig Work | Freelance Tax |
-| Real Estate | Mortgage Payment |
-| Health & Fitness | BMI, Calorie |
-| Construction & Home | Paint, Tile |
-| E-Commerce & Marketing | Ad ROI |
-| Everyday Life | (coming soon) |
+| Category               | Calculators                             |
+| ---------------------- | --------------------------------------- |
+| Finance & Tax          | Compound Interest, Take-Home Pay        |
+| Business & Startup     | Startup Cost, Break-Even, Profit Margin |
+| Freelance & Gig Work   | Freelance Tax                           |
+| Real Estate            | Mortgage Payment                        |
+| Health & Fitness       | BMI, Calorie                            |
+| Construction & Home    | Paint, Tile                             |
+| E-Commerce & Marketing | Ad ROI                                  |
+| Everyday Life          | (coming soon)                           |
 
 ## Stack
 

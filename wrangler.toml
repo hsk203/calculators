@@ -1,0 +1,10 @@
+name = "calculators"
+compatibility_date = "2026-11-13"
+workers_dev = true
+
+routes = [
+  { pattern = "calc.aitech8.com", custom_domain = true },
+]
+
+[assets]
+directory = "./dist"

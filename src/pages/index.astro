@@ -1,0 +1,194 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import {
+  CATEGORIES,
+  CALCULATORS,
+  calculatorsByCategory,
+  popularCalculators,
+} from "../data/calculators";
+
+const popular = popularCalculators();
+---
+
+<BaseLayout home>
+  <section class="calc-search" aria-label="Search calculators">
+    <input
+      id="calc-search"
+      type="search"
+      placeholder="Search calculators — try “mortgage”, “BMI”, or “tax”…"
+      aria-label="Search calculators"
+    />
+  </section>
+
+  <section class="home-categories" aria-label="Calculator categories">
+    <div class="section-head">
+      <h2>Browse by category</h2>
+      <p>
+        Eight categories, from mortgages to paint — pick one to see its
+        calculators.
+      </p>
+    </div>
+    <div class="category-grid">
+      {CATEGORIES.map((category) => (
+        <a class="category-card" href={`/calculators/${category.slug}/`}>
+          <strong>{category.name}</strong>
+          <span>{category.tagline}</span>
+          <span class="category-count">
+            {calculatorsByCategory(category.slug).length === 0
+              ? "Coming soon"
+              : `${calculatorsByCategory(category.slug).length} calculator${calculatorsByCategory(category.slug).length === 1 ? "" : "s"}`}
+          </span>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <section class="home-popular" aria-label="Popular calculators">
+    <div class="section-head">
+      <h2>Popular calculators</h2>
+      <p>The calculators people reach for most.</p>
+    </div>
+    <div class="calc-card-grid">
+      {popular.map((calc) => (
+        <a class="calc-card card" href={`/calculators/${calc.slug}/`}>
+          <strong>{calc.title}</strong>
+          <span>{calc.description}</span>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <section class="home-all" aria-label="All calculators">
+    <div class="section-head">
+      <h2>All calculators</h2>
+      <p>Type in the search box above to filter this list.</p>
+    </div>
+    <div class="calc-card-grid" id="all-calc-grid">
+      {CALCULATORS.map((calc) => (
+        <a
+          class="calc-card card"
+          href={`/calculators/${calc.slug}/`}
+          data-search={`${calc.title} ${calc.description} ${calc.tags.join(" ")}`.toLowerCase()}
+        >
+          <strong>{calc.title}</strong>
+          <span>{calc.description}</span>
+        </a>
+      ))}
+    </div>
+    <p class="no-results" id="no-results" hidden>
+      No calculator matches that search — try “mortgage”, “BMI”, or “tax”.
+    </p>
+  </section>
+</BaseLayout>
+
+<script>
+  const input = document.querySelector<HTMLInputElement>("#calc-search");
+  const grid = document.querySelector<HTMLElement>("#all-calc-grid");
+  const noResults = document.querySelector<HTMLElement>("#no-results");
+  const cards = grid
+    ? Array.from(grid.querySelectorAll<HTMLElement>("[data-search]"))
+    : [];
+  input?.addEventListener("input", () => {
+    const q = (input.value ?? "").trim().toLowerCase();
+    let visible = 0;
+    cards.forEach((card) => {
+      const hay = card.dataset.search ?? "";
+      const show = !q || hay.includes(q);
+      card.style.display = show ? "" : "none";
+      if (show) visible += 1;
+    });
+    if (noResults) noResults.hidden = visible !== 0;
+  });
+</script>
+
+<style>
+  .calc-search {
+    margin: 0 0 26px;
+  }
+  .calc-search input {
+    width: 100%;
+    font: inherit;
+    font-size: 15px;
+    color: var(--text);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .calc-search input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .section-head h2 {
+    font-size: 17px;
+    margin: 0 0 4px;
+  }
+  .section-head p {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  .home-categories,
+  .home-popular {
+    margin: 0 0 30px;
+  }
+  .category-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .category-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+    color: var(--text);
+    text-decoration: none;
+  }
+  .category-card:hover {
+    border-color: var(--accent);
+  }
+  .category-card strong {
+    font-size: 14px;
+  }
+  .category-card span {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .category-card .category-count {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--accent);
+  }
+  .calc-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+  }
+  .calc-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 18px;
+    text-decoration: none;
+    color: var(--text);
+  }
+  .calc-card:hover {
+    border-color: var(--accent);
+  }
+  .calc-card strong {
+    font-size: 15px;
+  }
+  .calc-card span {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .no-results {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 12px 0 0;
+  }
+</style>

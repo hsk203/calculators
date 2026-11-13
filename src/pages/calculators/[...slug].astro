@@ -1,0 +1,191 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import CalculatorWidget from "../../components/CalculatorWidget.astro";
+import {
+  CALCULATORS,
+  CATEGORIES,
+  getCalculator,
+  getCategory,
+  calculatorsByCategory,
+  categoryDisplayName,
+} from "../../data/calculators";
+
+export async function getStaticPaths() {
+  const paths: {
+    params: { slug: string };
+    props: { kind: string; slug: string };
+  }[] = [];
+  for (const calc of CALCULATORS)
+    paths.push({
+      params: { slug: calc.slug },
+      props: { kind: "calculator", slug: calc.slug },
+    });
+  for (const cat of CATEGORIES)
+    paths.push({
+      params: { slug: cat.slug },
+      props: { kind: "category", slug: cat.slug },
+    });
+  return paths;
+}
+
+const { kind, slug } = Astro.props as { kind: string; slug: string };
+const calculator = kind === "calculator" ? getCalculator(slug) : undefined;
+const category = kind === "category" ? getCategory(slug) : undefined;
+if (!calculator && !category)
+  throw new Error(`Unknown calculator page: ${slug}`);
+
+const faqJsonLd = calculator
+  ? JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: calculator.faqs.map((f) => ({
+        "@type": "Question",
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer", text: f.a },
+      })),
+    })
+  : "";
+const categoryCalcs = category ? calculatorsByCategory(category.slug) : [];
+---
+
+{calculator && (
+  <BaseLayout
+    title={calculator.title}
+    description={calculator.description}
+    heroTitle={calculator.title}
+    heroSubtitle={`Free online calculator · ${categoryDisplayName(calculator.category)}`}
+  >
+    <script type="application/ld+json" set:html={faqJsonLd} />
+    <CalculatorWidget calculator={calculator} />
+    <section class="card page-card">
+      <div class="prose">
+        <h2>How it works</h2>
+        {calculator.howItWorks.map((p) => (
+          <p>{p}</p>
+        ))}
+        <h2>Formula</h2>
+        <blockquote>
+          <p>{calculator.formula}</p>
+        </blockquote>
+        {calculator.formulaNote && <p>{calculator.formulaNote}</p>}
+        <h2>What each input means</h2>
+        <ul>
+          {calculator.fields.map((f) => (
+            <li>
+              <strong>{f.label}:</strong> {f.help ?? ""}
+            </li>
+          ))}
+        </ul>
+        <h2>{calculator.example.title}</h2>
+        <ul>
+          {calculator.example.body.map((line) => (
+            <li>{line}</li>
+          ))}
+        </ul>
+        <h2>Frequently asked questions</h2>
+        {calculator.faqs.map((f) => (
+          <div>
+            <h3>{f.q}</h3>
+            <p>{f.a}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+    <section class="related-calcs" aria-label="Related calculators">
+      <h2>Related calculators</h2>
+      <div class="calc-card-grid">
+        {calculator.related.map((relSlug) => {
+          const rel = getCalculator(relSlug);
+          if (!rel) return null;
+          return (
+            <a class="calc-card card" href={`/calculators/${rel.slug}/`}>
+              <strong>{rel.title}</strong>
+              <span>{rel.description}</span>
+            </a>
+          );
+        })}
+      </div>
+    </section>
+  </BaseLayout>
+)}
+
+{category && (
+  <BaseLayout
+    title={`${category.name} Calculators`}
+    description={category.description}
+    heroTitle={category.name}
+    heroSubtitle={category.tagline}
+  >
+    <section class="card page-card">
+      <div class="prose">
+        <p>{category.description}</p>
+        {categoryCalcs.length === 0 && (
+          <p>
+            More calculators are coming to this category soon. In the meantime,
+            browse the <a href="/calculators/">full calculator index</a>.
+          </p>
+        )}
+      </div>
+    </section>
+    {categoryCalcs.length > 0 && (
+      <section
+        class="category-calcs"
+        aria-label={`${category.name} calculators`}
+      >
+        <div class="calc-card-grid">
+          {categoryCalcs.map((calc) => (
+            <a class="calc-card card" href={`/calculators/${calc.slug}/`}>
+              <strong>{calc.title}</strong>
+              <span>{calc.description}</span>
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
+    <section class="related-calcs" aria-label="Other categories">
+      <h2>Other categories</h2>
+      <div class="calc-card-grid">
+        {CATEGORIES.filter((c) => c.slug !== category.slug).map((c) => (
+          <a class="calc-card card" href={`/calculators/${c.slug}/`}>
+            <strong>{c.name}</strong>
+            <span>{c.tagline}</span>
+          </a>
+        ))}
+      </div>
+    </section>
+  </BaseLayout>
+)}
+
+<style>
+  .calc-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin: 0 0 26px;
+  }
+  .calc-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 18px;
+    text-decoration: none;
+    color: var(--text);
+  }
+  .calc-card:hover {
+    border-color: var(--accent);
+  }
+  .calc-card strong {
+    font-size: 15px;
+  }
+  .calc-card span {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .related-calcs h2 {
+    font-size: 17px;
+    margin: 0 0 14px;
+  }
+  .category-calcs {
+    margin-top: 4px;
+  }
+</style>

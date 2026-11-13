@@ -1,0 +1,86 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { CATEGORIES, calculatorsByCategory } from "../../data/calculators";
+---
+
+<BaseLayout
+  title="All Calculators"
+  description="Every free calculator on Calculator Hub, grouped by category: finance, business, freelance, real estate, health, home, and marketing."
+  heroTitle="All Calculators"
+  heroSubtitle="Every free calculator on this site, grouped by category."
+>
+  {CATEGORIES.map((category) => {
+    const calcs = calculatorsByCategory(category.slug);
+    return (
+      <section class="index-category" aria-label={category.name}>
+        <h2>
+          <a href={`/calculators/${category.slug}/`}>{category.name}</a>
+        </h2>
+        <p class="index-tagline">{category.tagline}</p>
+        {calcs.length > 0 ? (
+          <div class="calc-card-grid">
+            {calcs.map((calc) => (
+              <a class="calc-card card" href={`/calculators/${calc.slug}/`}>
+                <strong>{calc.title}</strong>
+                <span>{calc.description}</span>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <p class="coming-soon">
+            More calculators are coming to this category soon.
+          </p>
+        )}
+      </section>
+    );
+  })}
+</BaseLayout>
+
+<style>
+  .index-category {
+    margin: 0 0 30px;
+  }
+  .index-category h2 {
+    font-size: 18px;
+    margin: 0 0 4px;
+  }
+  .index-category h2 a {
+    color: var(--text);
+    text-decoration: none;
+  }
+  .index-category h2 a:hover {
+    color: var(--accent);
+  }
+  .index-tagline {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  .coming-soon {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .calc-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+  }
+  .calc-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 18px;
+    text-decoration: none;
+    color: var(--text);
+  }
+  .calc-card:hover {
+    border-color: var(--accent);
+  }
+  .calc-card strong {
+    font-size: 15px;
+  }
+  .calc-card span {
+    font-size: 12px;
+    color: var(--muted);
+  }
+</style>

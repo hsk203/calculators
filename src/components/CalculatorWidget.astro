@@ -1,0 +1,546 @@
+---
+import type { Calculator } from "../data/calculators";
+
+interface Props {
+  calculator: Calculator;
+}
+const { calculator } = Astro.props;
+const widgetId = `calc-${calculator.slug}`;
+---
+
+<section
+  class="calc-widget card"
+  id={widgetId}
+  data-compute={calculator.compute}
+  aria-label={`${calculator.title} calculator`}
+>
+  <form class="calc-form" onsubmit="return false;">
+    {calculator.unitToggle && (
+      <div class="calc-field calc-units">
+        <label for={`${widgetId}-${calculator.unitToggle.id}`}>
+          {calculator.unitToggle.label}
+        </label>
+        <select
+          id={`${widgetId}-${calculator.unitToggle.id}`}
+          data-unit-toggle={calculator.unitToggle.id}
+        >
+          {calculator.unitToggle.options.map((opt) => (
+            <option
+              value={opt.value}
+              selected={opt.value === calculator.unitToggle?.defaultValue}
+            >
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    )}
+    {calculator.fields.map((field) => (
+      <div class="calc-field" data-group={field.group ?? ""}>
+        <label for={`${widgetId}-${field.id}`}>{field.label}</label>
+        <div class="calc-input-wrap">
+          {field.type === "select" ? (
+            <select id={`${widgetId}-${field.id}`} data-field-id={field.id}>
+              {field.options?.map((opt) => (
+                <option
+                  value={opt.value}
+                  selected={
+                    String(opt.value) === String(field.defaultValue ?? "")
+                  }
+                >
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id={`${widgetId}-${field.id}`}
+              data-field-id={field.id}
+              type="number"
+              inputmode="decimal"
+              value={field.defaultValue ?? ""}
+              min={field.min}
+              max={field.max}
+              step={field.step ?? "any"}
+              placeholder={field.placeholder ?? ""}
+            />
+          )}
+          {field.unit && <span class="calc-unit">{field.unit}</span>}
+        </div>
+      </div>
+    ))}
+    <button type="button" class="calc-button" data-calc-button>
+      Calculate
+    </button>
+  </form>
+  <div class="calc-result" data-calc-result aria-live="polite">
+    <p class="calc-hint">{calculator.resultHint}</p>
+  </div>
+</section>
+
+<script>
+  type ResultLine = {
+    label: string;
+    value: string;
+    primary?: boolean;
+    note?: string;
+  };
+
+  const money = (n: number): string =>
+    "$" +
+    n.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  const money0 = (n: number): string =>
+    "$" + Math.round(n).toLocaleString("en-US");
+  const num = (n: number, d = 2): string =>
+    n.toLocaleString("en-US", {
+      minimumFractionDigits: d,
+      maximumFractionDigits: d,
+    });
+  const int = (n: number): string => Math.round(n).toLocaleString("en-US");
+  const pct = (n: number, d = 1): string => `${num(n, d)}%`;
+
+  const COMPUTE: Record<
+    string,
+    (v: Record<string, number | string>) => ResultLine[] | string
+  > = {
+    mortgage: (v) => {
+      const P = Number(v.loanAmount) || 0;
+      const r = (Number(v.annualRate) || 0) / 100 / 12;
+      const n = (Number(v.years) || 0) * 12;
+      if (P <= 0 || n <= 0)
+        return "Enter a loan amount above $0 and a term above 0 years.";
+      const M =
+        r === 0
+          ? P / n
+          : (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+      return [
+        {
+          label: "Monthly payment",
+          value: `${money(M)} / month`,
+          primary: true,
+        },
+        { label: "Total paid over the loan", value: money(M * n) },
+        { label: "Total interest", value: money(M * n - P) },
+      ];
+    },
+    "freelance-tax": (v) => {
+      const income = Number(v.income) || 0;
+      const expenses = Number(v.expenses) || 0;
+      const rate = Number(v.rate) || 0;
+      const taxable = Math.max(0, income - expenses);
+      const tax = (taxable * rate) / 100;
+      return [
+        { label: "Taxable income", value: money(taxable) },
+        { label: "Estimated tax", value: money(tax), primary: true },
+        { label: "You keep after tax", value: money(income - tax) },
+      ];
+    },
+    "startup-cost": (v) => {
+      let oneTime = 0;
+      let monthly = 0;
+      for (const [key, value] of Object.entries(v)) {
+        const n = Number(value) || 0;
+        if (key.startsWith("once_")) oneTime += n;
+        if (key.startsWith("month_")) monthly += n;
+      }
+      return [
+        { label: "Total one-time costs", value: money0(oneTime) },
+        { label: "Monthly burn", value: `${money0(monthly)} / month` },
+        {
+          label: "First-year total",
+          value: money0(oneTime + 12 * monthly),
+          primary: true,
+          note: "One-time costs + 12 months of burn — the money to have ready before you start.",
+        },
+      ];
+    },
+    "break-even": (v) => {
+      const fixed = Number(v.fixed) || 0;
+      const variable = Number(v.variable) || 0;
+      const price = Number(v.price) || 0;
+      const margin = price - variable;
+      if (margin <= 0)
+        return "Set a price above the variable cost per unit — otherwise every sale loses money and there is no break-even point.";
+      const units = Math.ceil(fixed / margin);
+      return [
+        {
+          label: "Break-even units",
+          value: `${int(units)} units`,
+          primary: true,
+        },
+        { label: "Break-even revenue", value: money(units * price) },
+        { label: "Contribution per unit", value: money(margin) },
+      ];
+    },
+    compound: (v) => {
+      const P = Number(v.principal) || 0;
+      const rate = (Number(v.rate) || 0) / 100;
+      const t = Number(v.years) || 0;
+      const n = Number(v.frequency) || 1;
+      if (P <= 0 || t <= 0)
+        return "Enter a principal above $0 and a term above 0 years.";
+      const A = P * Math.pow(1 + rate / n, n * t);
+      return [
+        { label: "Future value", value: money(A), primary: true },
+        { label: "Interest earned", value: money(A - P) },
+        { label: "Your principal", value: money(P) },
+      ];
+    },
+    "take-home": (v) => {
+      const gross = Number(v.gross) || 0;
+      const rate = Number(v.rate) || 0;
+      const deductions = Number(v.deductions) || 0;
+      const tax = (gross * rate) / 100;
+      const net = gross - tax - deductions;
+      return [
+        { label: "Annual take-home pay", value: money(net), primary: true },
+        { label: "Monthly take-home pay", value: money(net / 12) },
+        { label: "Tax paid", value: money(tax) },
+      ];
+    },
+    bmi: (v) => {
+      let bmi: number;
+      if (v.units === "imperial") {
+        const lb = Number(v.weightLb) || 0;
+        const inch = Number(v.heightIn) || 0;
+        if (lb <= 0 || inch <= 0)
+          return "Enter your weight and height to calculate your BMI.";
+        bmi = (703 * lb) / (inch * inch);
+      } else {
+        const kg = Number(v.weightKg) || 0;
+        const cm = Number(v.heightCm) || 0;
+        if (kg <= 0 || cm <= 0)
+          return "Enter your weight and height to calculate your BMI.";
+        const m = cm / 100;
+        bmi = kg / (m * m);
+      }
+      const category =
+        bmi < 18.5
+          ? "Underweight"
+          : bmi < 25
+            ? "Healthy weight"
+            : bmi < 30
+              ? "Overweight"
+              : "Obese";
+      return [
+        { label: "Your BMI", value: num(bmi, 1), primary: true },
+        {
+          label: "Category",
+          value: category,
+          note: "BMI is a screening tool, not a diagnosis.",
+        },
+      ];
+    },
+    calorie: (v) => {
+      const age = Number(v.age) || 0;
+      const weight = Number(v.weight) || 0;
+      const height = Number(v.height) || 0;
+      const factor = Number(v.activity) || 1.2;
+      if (age <= 0 || weight <= 0 || height <= 0)
+        return "Enter your age, weight, and height to estimate your daily calories.";
+      const bmr =
+        v.gender === "male"
+          ? 10 * weight + 6.25 * height - 5 * age + 5
+          : 10 * weight + 6.25 * height - 5 * age - 161;
+      const tdee = bmr * factor;
+      return [
+        { label: "Basal metabolic rate (BMR)", value: `${int(bmr)} kcal/day` },
+        {
+          label: "Daily calories to maintain weight",
+          value: `${int(tdee)} kcal/day`,
+          primary: true,
+          note: "To lose about 0.5 kg per week, aim for roughly 300–500 kcal below this number.",
+        },
+      ];
+    },
+    paint: (v) => {
+      const walls = Number(v.walls) || 0;
+      const coats = Number(v.coats) || 0;
+      if (walls <= 0 || coats <= 0)
+        return "Enter the number of walls and coats.";
+      if (v.units === "m") {
+        const area =
+          (Number(v.lengthM) || 0) * (Number(v.heightM) || 0) * walls * coats;
+        const litres = area / 10;
+        return [
+          { label: "Paintable area", value: `${num(area, 1)} sq m` },
+          {
+            label: "Paint needed",
+            value: `${num(litres, 1)} litres`,
+            primary: true,
+          },
+          { label: "In gallons", value: `${num(litres / 3.785, 2)} gal` },
+          { label: "Buy", value: `${Math.ceil(litres)} litres (rounded up)` },
+        ];
+      }
+      const area =
+        (Number(v.lengthFt) || 0) * (Number(v.heightFt) || 0) * walls * coats;
+      const gal = area / 350;
+      return [
+        { label: "Paintable area", value: `${num(area, 0)} sq ft` },
+        {
+          label: "Paint needed",
+          value: `${num(gal, 2)} gallons`,
+          primary: true,
+        },
+        { label: "In litres", value: `${num(gal * 3.785, 1)} L` },
+        { label: "Buy", value: `${Math.ceil(gal)} gallons (rounded up)` },
+      ];
+    },
+    tile: (v) => {
+      let floorArea = 0;
+      let tileArea = 0;
+      let areaLabel = "";
+      if (v.units === "m") {
+        floorArea = (Number(v.floorLM) || 0) * (Number(v.floorWM) || 0);
+        tileArea =
+          ((Number(v.tileLM) || 0) / 100) * ((Number(v.tileWM) || 0) / 100);
+        areaLabel = "sq m";
+      } else {
+        floorArea = (Number(v.floorLFt) || 0) * (Number(v.floorWFt) || 0);
+        tileArea =
+          ((Number(v.tileLFt) || 0) / 12) * ((Number(v.tileWFt) || 0) / 12);
+        areaLabel = "sq ft";
+      }
+      if (floorArea <= 0 || tileArea <= 0)
+        return "Enter the floor size and tile size to calculate how many tiles you need.";
+      // Round to 4 decimals first: binary floating point can turn an exact
+      // 120 tiles into 120.00000000000001, and Math.ceil would then say 121.
+      const exact = Math.round((floorArea / tileArea) * 10000) / 10000;
+      const tiles = Math.ceil(exact * 1.1);
+      return [
+        { label: "Floor area", value: `${num(floorArea, 1)} ${areaLabel}` },
+        {
+          label: "Tiles needed",
+          value: `${int(tiles)} tiles`,
+          primary: true,
+          note: "Includes 10% extra for cuts and breakage.",
+        },
+        {
+          label: "Exact count before waste",
+          value: `${int(Math.ceil(exact))} tiles`,
+        },
+      ];
+    },
+    "ad-roi": (v) => {
+      const spend = Number(v.spend) || 0;
+      const revenue = Number(v.revenue) || 0;
+      if (spend <= 0) return "Enter an ad spend above $0 to calculate ROI.";
+      const profit = revenue - spend;
+      return [
+        {
+          label: "Return on investment (ROI)",
+          value: pct((profit / spend) * 100, 0),
+          primary: true,
+        },
+        { label: "Profit from ads", value: money(profit) },
+        {
+          label: "Return on ad spend (ROAS)",
+          value: `${num(revenue / spend, 1)}×`,
+        },
+      ];
+    },
+    margin: (v) => {
+      const revenue = Number(v.revenue) || 0;
+      const cost = Number(v.cost) || 0;
+      if (revenue <= 0)
+        return "Enter a revenue above $0 to calculate your margin.";
+      const profit = revenue - cost;
+      return [
+        { label: "Profit", value: money(profit) },
+        {
+          label: "Profit margin",
+          value: pct((profit / revenue) * 100),
+          primary: true,
+        },
+        {
+          label: "Markup",
+          value: cost > 0 ? pct((profit / cost) * 100, 2) : "—",
+          note: "Margin is profit ÷ revenue; markup is profit ÷ cost.",
+        },
+      ];
+    },
+  };
+
+  const widgets = document.querySelectorAll<HTMLElement>(".calc-widget");
+  widgets.forEach((widget) => {
+    const computeId = widget.dataset.compute ?? "";
+    const compute = COMPUTE[computeId];
+    const resultEl = widget.querySelector<HTMLElement>("[data-calc-result]");
+    const button =
+      widget.querySelector<HTMLButtonElement>("[data-calc-button]");
+    const unitToggle =
+      widget.querySelector<HTMLSelectElement>("[data-unit-toggle]");
+    if (!compute || !resultEl) return;
+
+    const readValues = (): Record<string, number | string> => {
+      const values: Record<string, number | string> = {};
+      const activeGroup = unitToggle?.value ?? "";
+      widget.querySelectorAll<HTMLElement>("[data-field-id]").forEach((el) => {
+        const field = el.closest<HTMLElement>("[data-group]");
+        const group = field?.dataset.group ?? "";
+        if (group && group !== activeGroup) return;
+        const id = el.dataset.fieldId ?? "";
+        if (el instanceof HTMLSelectElement) values[id] = el.value;
+        else if (el instanceof HTMLInputElement)
+          values[id] = el.value === "" ? 0 : Number(el.value);
+      });
+      if (unitToggle)
+        values[unitToggle.dataset.unitToggle ?? "units"] = unitToggle.value;
+      return values;
+    };
+
+    const render = () => {
+      const out = compute(readValues());
+      if (typeof out === "string") {
+        resultEl.innerHTML = `<p class="calc-error">${out}</p>`;
+        return;
+      }
+      resultEl.innerHTML = out
+        .map(
+          (line) =>
+            `<div class="calc-line${line.primary ? " calc-line-primary" : ""}"><span class="calc-line-label">${line.label}</span><strong class="calc-line-value">${line.value}</strong>${line.note ? `<span class="calc-line-note">${line.note}</span>` : ""}</div>`,
+        )
+        .join("");
+    };
+
+    const applyGroups = () => {
+      const activeGroup = unitToggle?.value ?? "";
+      widget
+        .querySelectorAll<HTMLElement>(".calc-field[data-group]")
+        .forEach((field) => {
+          const group = field.dataset.group ?? "";
+          field.style.display = !group || group === activeGroup ? "" : "none";
+        });
+      render();
+    };
+
+    widget.addEventListener("input", render);
+    widget.addEventListener("change", render);
+    button?.addEventListener("click", render);
+    unitToggle?.addEventListener("change", applyGroups);
+    applyGroups();
+  });
+</script>
+
+<style>
+  .calc-widget {
+    padding: 22px;
+    margin: 0 0 26px;
+  }
+  .calc-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px 16px;
+  }
+  .calc-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .calc-field label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .calc-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .calc-input-wrap input,
+  .calc-input-wrap select {
+    flex: 1;
+    min-width: 0;
+    font: inherit;
+    font-size: 15px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 10px 12px;
+  }
+  .calc-input-wrap input:focus,
+  .calc-input-wrap select:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .calc-unit {
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .calc-units {
+    grid-column: 1 / -1;
+  }
+  .calc-button {
+    grid-column: 1 / -1;
+    justify-self: start;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: 0;
+    border-radius: 10px;
+    padding: 12px 26px;
+    cursor: pointer;
+  }
+  .calc-button:hover {
+    opacity: 0.9;
+  }
+  .calc-result {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--line);
+  }
+  .calc-hint,
+  .calc-error {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .calc-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+    padding: 7px 0;
+  }
+  .calc-line + .calc-line {
+    border-top: 1px solid var(--line);
+  }
+  .calc-line-label {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .calc-line-value {
+    font-size: 15px;
+    margin-left: auto;
+  }
+  .calc-line-primary .calc-line-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .calc-line-primary .calc-line-value {
+    font-size: 24px;
+    color: var(--accent);
+  }
+  .calc-line-note {
+    flex-basis: 100%;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  @media (max-width: 560px) {
+    .calc-widget {
+      padding: 16px;
+    }
+    .calc-line-primary .calc-line-value {
+      font-size: 21px;
+    }
+  }
+</style>
